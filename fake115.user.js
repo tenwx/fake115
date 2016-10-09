@@ -4,9 +4,10 @@
 // @version      1.1
 // @description  非115浏览器登录115.com
 // @author       kkhaike
-// @match        http://115.com/*
+// @match        *://115.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
+// @grant        GM_log
 // @connect      passport.115.com
 // @require      http://cdn.bootcss.com/crc-32/0.4.1/crc32.min.js
 // @require      http://cdn.bootcss.com/blueimp-md5/2.3.0/js/md5.min.js
@@ -18,7 +19,7 @@
 // @require      http://www-cs-students.stanford.edu/~tjw/jsbn/ec.js
 // @require      http://www-cs-students.stanford.edu/~tjw/jsbn/sec.js
 // @require      https://rawgit.com/kkHAIKE/node-lz4/balabala/build/lz4.js
-// @run-at       document-end
+// @run-at       document-start
 // ==/UserScript==
 (function() {
     'use strict';
@@ -238,10 +239,10 @@ LoginEncrypt_ = function(_arg, g) {
         if (dec === 1) {
           data = ec115_decode_aes(data, key);
         }
-        if (unzip === 1) {
+        if ((data != null) && unzip === 1) {
           data = ec115_compress_decode(data);
         }
-        if (data !== null) {
+        if (data != null) {
           json = JSON.parse(bytesToString(data));
           if (json.state) {
             date = new Date();
@@ -255,7 +256,11 @@ LoginEncrypt_ = function(_arg, g) {
             delete json.data;
           }
           return unsafeWindow[g](JSON.stringify(json));
+        } else {
+          return GM_log('data is null');
         }
+      } else {
+        return GM_log("response.status = " + response.status);
       }
     }
   });
@@ -264,7 +269,13 @@ LoginEncrypt_ = function(_arg, g) {
 browserInterface = (_ref = unsafeWindow.browserInterface) != null ? _ref : {};
 
 browserInterface.LoginEncrypt = function(n, g) {
-  return LoginEncrypt_(JSON.parse(n), g);
+  var error;
+  try {
+    return LoginEncrypt_(JSON.parse(n), g);
+  } catch (_error) {
+    error = _error;
+    return GM_log("" + error);
+  }
 };
 
 unsafeWindow.browserInterface = cloneInto(browserInterface, unsafeWindow, {
