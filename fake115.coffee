@@ -1,7 +1,7 @@
 `// ==UserScript==
 // @name         fake 115Browser
 // @namespace    http://github.com/kkHAIKE/fake115
-// @version      1.3.4
+// @version      1.3.5
 // @description  伪装115浏览器
 // @author       kkhaike
 // @match        *://115.com/*
@@ -12,14 +12,14 @@
 // @connect      passportapi.115.com
 // @connect      proapi.115.com
 // @connect      uplb.115.com
-// @require      http://cdn.bootcss.com/crc-32/0.4.1/crc32.min.js
-// @require      http://cdn.bootcss.com/blueimp-md5/2.3.0/js/md5.min.js
-// @require      https://rawgit.com/ricmoo/aes-js/master/index.js
+// @require      https://cdn.bootcss.com/crc-32/1.2.0/crc32.min.js
+// @require      https://cdn.bootcss.com/blueimp-md5/2.10.0/js/md5.min.js
+// @require      https://cdn.bootcss.com/aes-js/3.1.0/index.min.js
 // @require      https://rawgit.com/kkHAIKE/node-lz4/balabala/build/lz4.min.js
 // @require      https://rawgit.com/indutny/elliptic/master/dist/elliptic.min.js
 // @require      https://rawgit.com/emn178/js-md4/master/build/md4.min.js
 // @require      https://rawgit.com/kkHAIKE/fake115/master/fec115.min.js
-// @require      http://cdn.bootcss.com/jsSHA/2.2.0/sha1.js
+// @require      https://cdn.bootcss.com/jsSHA/2.3.1/sha1.js
 // @require      https://rawgit.com/pierrec/js-xxhash/master/build/xxhash.min.js
 // @run-at       document-start
 // ==/UserScript==
@@ -29,6 +29,8 @@ g_ver = '8.3.0.25'
 
 Buffer = require('buffer').Buffer
 LZ4 = require 'lz4'
+elliptic = window.elliptic
+md4 = window.md4
 
 stringToBytes = (s) ->
   ret = []
@@ -311,7 +313,7 @@ preLoginEncrypt = (n,g) ->
 
               LoginEncrypt_ JSON.parse(n), g, {pub, key}, sig
             catch error
-              GM_log "#{error.stack}"
+              GM_log "#{error.message}\n#{error.stack}"
           else
             GM_log JSON.stringify json
         else
@@ -324,7 +326,10 @@ browserInterface.LoginEncrypt = (n,g) ->
   try
     preLoginEncrypt n, g
   catch error
-    GM_log "#{error.stack}"
+    GM_log "#{error.message}\n#{error.stack}"
+
+browserInterface.GetBrowserVersion = ->
+  new String(g_ver)
 
 unsafeWindow.browserInterface = cloneInto browserInterface, unsafeWindow, {cloneFunctions: true}
 
@@ -460,6 +465,6 @@ unsafeWindow.document.addEventListener 'DOMContentLoaded', ->
         unsafeWindow.UPLOAD_CONFIG_H5.__defineGetter__ 'size_limit', fakeSizeLimitGetter
 
   catch error
-    GM_log "#{error.stack}"
+    GM_log "#{error.message}\n#{error.stack}"
 
 `})()`

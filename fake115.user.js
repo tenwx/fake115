@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         fake 115Browser
 // @namespace    http://github.com/kkHAIKE/fake115
-// @version      1.3.4
+// @version      1.3.5
 // @description  伪装115浏览器
 // @author       kkhaike
 // @match        *://115.com/*
@@ -12,26 +12,30 @@
 // @connect      passportapi.115.com
 // @connect      proapi.115.com
 // @connect      uplb.115.com
-// @require      http://cdn.bootcss.com/crc-32/0.4.1/crc32.min.js
-// @require      http://cdn.bootcss.com/blueimp-md5/2.3.0/js/md5.min.js
-// @require      https://rawgit.com/ricmoo/aes-js/master/index.js
-// @require      https://rawgit.com/kkHAIKE/node-lz4/balabala/build/lz4.min.js
-// @require      https://rawgit.com/indutny/elliptic/master/dist/elliptic.min.js
-// @require      https://rawgit.com/emn178/js-md4/master/build/md4.min.js
-// @require      https://rawgit.com/kkHAIKE/fake115/master/fec115.min.js
-// @require      http://cdn.bootcss.com/jsSHA/2.2.0/sha1.js
-// @require      https://rawgit.com/pierrec/js-xxhash/master/build/xxhash.min.js
+// @require      https://cdn.bootcss.com/crc-32/1.2.0/crc32.min.js
+// @require      https://cdn.bootcss.com/blueimp-md5/2.10.0/js/md5.min.js
+// @require      https://cdn.bootcss.com/aes-js/3.1.0/index.min.js
+// @require      https://raw.github.com/kkHAIKE/node-lz4/balabala/build/lz4.min.js
+// @require      https://raw.github.com/indutny/elliptic/master/dist/elliptic.min.js
+// @require      https://raw.github.com/emn178/js-md4/master/build/md4.min.js
+// @require      https://raw.github.com/kkHAIKE/fake115/master/fec115.min.js
+// @require      https://cdn.bootcss.com/jsSHA/2.3.1/sha1.js
+// @require      https://raw.github.com/pierrec/js-xxhash/master/build/xxhash.min.js
 // @run-at       document-start
 // ==/UserScript==
 (function() {
     'use strict';
-var Buffer, LZ4, LoginEncrypt_, browserInterface, bytesToHex, bytesToString, dictToForm, dictToQuery, ec115_compress_decode, ec115_decode, ec115_decode_aes, ec115_encode_data, ec115_encode_token, ec115_init, g_ver, get_key, md4_init, preLoginEncrypt, ref, sig_calc, sig_init, stringToBytes;
+var Buffer, LZ4, LoginEncrypt_, browserInterface, bytesToHex, bytesToString, dictToForm, dictToQuery, ec115_compress_decode, ec115_decode, ec115_decode_aes, ec115_encode_data, ec115_encode_token, ec115_init, elliptic, g_ver, get_key, md4, md4_init, preLoginEncrypt, ref, sig_calc, sig_init, stringToBytes;
 
 g_ver = '8.3.0.25';
 
 Buffer = require('buffer').Buffer;
 
 LZ4 = require('lz4');
+
+elliptic = window.elliptic;
+
+md4 = window.md4;
 
 stringToBytes = function(s) {
   var i, l, ref, ret;
@@ -362,7 +366,7 @@ preLoginEncrypt = function(n, g) {
               }, sig);
             } catch (error1) {
               error = error1;
-              return GM_log("" + error.stack);
+              return GM_log(error.message + "\n" + error.stack);
             }
           } else {
             return GM_log(JSON.stringify(json));
@@ -385,8 +389,12 @@ browserInterface.LoginEncrypt = function(n, g) {
     return preLoginEncrypt(n, g);
   } catch (error1) {
     error = error1;
-    return GM_log("" + error.stack);
+    return GM_log(error.message + "\n" + error.stack);
   }
+};
+
+browserInterface.GetBrowserVersion = function() {
+  return new String(g_ver);
 };
 
 unsafeWindow.browserInterface = cloneInto(browserInterface, unsafeWindow, {
@@ -552,7 +560,7 @@ unsafeWindow.document.addEventListener('DOMContentLoaded', function() {
     }
   } catch (error1) {
     error = error1;
-    return GM_log("" + error.stack);
+    return GM_log(error.message + "\n" + error.stack);
   }
 });
 
