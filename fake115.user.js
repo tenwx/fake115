@@ -21,6 +21,7 @@
 // @require      https://raw.github.com/kkHAIKE/fake115/master/fec115.min.js
 // @require      https://cdn.bootcss.com/jsSHA/2.3.1/sha1.js
 // @require      https://raw.github.com/pierrec/js-xxhash/master/build/xxhash.min.js
+// @require      https://raw.github.com/omichelsen/compare-versions/master/index.js
 // @run-at       document-start
 // ==/UserScript==
 (function() {
@@ -40,7 +41,7 @@ md4 = window.md4;
 stringToBytes = function(s) {
   var i, l, ref, ret;
   ret = [];
-  for (i = l = 0, ref = s.length; 0 <= ref ? l < ref : l > ref; i = 0 <= ref ? ++l : --l) {
+  for (i = l = 0, ref = s.length; (0 <= ref ? l < ref : l > ref); i = 0 <= ref ? ++l : --l) {
     ret.push(s.charCodeAt(i));
   }
   return ret;
@@ -74,10 +75,7 @@ ec115_init = function() {
   pub = [0x1d].concat(keys.getPublic(true, true));
   Q = c.keyFromPublic('0457A29257CD2320E5D6D143322FA4BB8A3CF9D3CC623EF5EDAC62B7678A89C91A83BA800D6129F522D034C895DD2465243ADDC250953BEEBA'.toLowerCase(), 'hex');
   key = (keys.derive(Q.getPublic())).toArray();
-  return {
-    pub: pub,
-    key: key
-  };
+  return {pub, key};
 };
 
 ec115_encode_token = function(pub, tm, cnt) {
@@ -198,17 +196,11 @@ sig_init = function(body) {
   md4h = md4_init(pSig);
   md4h.update(data_buf);
   dhash = md4h.digest();
-  return {
-    data_buf: data_buf,
-    data_buf_p: data_buf_p,
-    pSig: pSig,
-    dhash: dhash
-  };
+  return {data_buf, data_buf_p, pSig, dhash};
 };
 
-sig_calc = function(arg, src) {
-  var data_buf, data_buf_p, dhash, h1, h1_p, h2, h2b, i, l, md4h, out_data, out_data_p, pSig, pad, ret, sz, xxh;
-  data_buf = arg.data_buf, data_buf_p = arg.data_buf_p, pSig = arg.pSig, dhash = arg.dhash;
+sig_calc = function({data_buf, data_buf_p, pSig, dhash}, src) {
+  var h1, h1_p, h2, h2b, i, l, md4h, out_data, out_data_p, pad, ret, sz, xxh;
   xxh = XXH.h64();
   xxh.init(pSig.readUInt32LE(8));
   xxh.update(src);
@@ -258,7 +250,7 @@ dictToQuery = function(dict) {
   tmp = [];
   for (k in dict) {
     v = dict[k];
-    tmp.push((encodeURIComponent(k)) + "=" + (encodeURIComponent(v)));
+    tmp.push(`${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
   }
   return tmp.join('&');
 };
@@ -268,15 +260,13 @@ dictToForm = function(dict) {
   tmp = [];
   for (k in dict) {
     v = dict[k];
-    tmp.push(k + "=" + v);
+    tmp.push(`${k}=${v}`);
   }
   return tmp.join('&');
 };
 
-LoginEncrypt_ = function(arg, g, arg1, sig) {
-  var account, data, environment, fake, goto, key, login_type, passwd, pub, tm, tmus, token;
-  account = arg.account, passwd = arg.passwd, environment = arg.environment, goto = arg.goto, login_type = arg.login_type;
-  pub = arg1.pub, key = arg1.key;
+LoginEncrypt_ = function({account, passwd, environment, goto, login_type}, g, {pub, key}, sig) {
+  var data, fake, tm, tmus, token;
   tmus = (new Date()).getTime();
   tm = Math.floor(tmus / 1000);
   fake = md5(account);
@@ -284,34 +274,38 @@ LoginEncrypt_ = function(arg, g, arg1, sig) {
   data = ec115_encode_data(dictToForm({
     GUID: fake.slice(0, 20),
     account: account,
-    device: 'GhostXP',
-    device_id: fake.slice(2, 14).toUpperCase(),
+    device: 'GhostXP', // hostname
+    device_id: fake.slice(2, 14).toUpperCase(), // mac
     device_type: 'windows',
-    disk_serial: fake.slice(0, 8).toUpperCase(),
+    disk_serial: fake.slice(0, 8).toUpperCase(), // harddisk serial
     dk: '',
     environment: environment,
     goto: goto,
     login_source: '115chrome',
     network: '5',
     passwd: passwd,
-    sign: md5("" + account + tm),
-    system_info: ("            " + fake[1] + fake[0] + fake[3] + fake[2] + fake[5] + fake[4] + fake[7] + fake[6]).toUpperCase(),
+    sign: md5(`${account}${tm}`),
+    system_info: `            ${fake[1]}${fake[0]}${fake[3]}${fake[2]}${fake[5]}${fake[4]}${fake[7]}${fake[6]}`.toUpperCase(),
+    // sha1(user sid (unicode)) + c volume serial + checksum
     time: tm,
     login_type: login_type,
     signew: 1,
-    sign115: sig_calc(sig, md5("" + account + tm))
+    sign115: sig_calc(sig, md5(`${account}${tm}`))
   }), key);
   return GM_xmlhttpRequest({
     method: 'POST',
-    url: "http://passport.115.com/?ct=encrypt&ac=login&k_ec=" + token,
-    data: GM_info.scriptHandler === 'Violentmonkey' ? new Blob([data.buffer], {
+    url: `http://passport.115.com/?ct=encrypt&ac=login&k_ec=${token //encodeURIComponent
+}`,
+    data: GM_info.scriptHandler === 'Violentmonkey' && compareVersions.compare(GM_info.version, 'v2.12.2', '<') ? new Blob([data.buffer], {
       type: 'application/octet-binary'
     }) : data.toString('latin1'),
     binary: true,
     responseType: 'arraybuffer',
+    //overrideMimeType: 'text\/plain; charset=x-user-defined'
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
     },
+    //anonymous: true
     onload: function(response) {
       var date, datestr, json;
       if (response.status === 200) {
@@ -323,10 +317,11 @@ LoginEncrypt_ = function(arg, g, arg1, sig) {
             date = new Date();
             date.setTime(date.getTime() + 7 * 24 * 3600 * 1000);
             datestr = date.toGMTString();
-            document.cookie = "UID=" + json.data.cookie.UID + "; expires=" + datestr + "; path=/; domain=115.com";
-            document.cookie = "CID=" + json.data.cookie.CID + "; expires=" + datestr + "; path=/; domain=115.com";
-            document.cookie = "SEID=" + json.data.cookie.SEID + "; expires=" + datestr + "; path=/; domain=115.com";
-            document.cookie = "OOFL=" + json.data.user_id + "; expires=" + datestr + "; path=/; domain=115.com";
+            document.cookie = `UID=${json.data.cookie.UID}; expires=${datestr}; path=/; domain=115.com`;
+            document.cookie = `CID=${json.data.cookie.CID}; expires=${datestr}; path=/; domain=115.com`;
+            document.cookie = `SEID=${json.data.cookie.SEID}; expires=${datestr}; path=/; domain=115.com`;
+            document.cookie = `OOFL=${json.data.user_id}; expires=${datestr}; path=/; domain=115.com`;
+            //json.goto = "#{json.goto}#{encodeURIComponent(goto)}"
             delete json.data;
           }
           return unsafeWindow[g](JSON.stringify(json));
@@ -334,21 +329,21 @@ LoginEncrypt_ = function(arg, g, arg1, sig) {
           return GM_log('data is null');
         }
       } else {
-        return GM_log("response.status = " + response.status);
+        return GM_log(`response.status = ${response.status}`);
       }
     }
   });
 };
 
 preLoginEncrypt = function(n, g) {
-  var key, pub, ref, tm, tmus, token;
+  var key, pub, tm, tmus, token;
   tmus = (new Date()).getTime();
   tm = Math.floor(tmus / 1000);
-  ref = ec115_init(), pub = ref.pub, key = ref.key;
+  ({pub, key} = ec115_init());
   token = ec115_encode_token(pub, tm, 0);
   return GM_xmlhttpRequest({
     method: 'GET',
-    url: "https://passportapi.115.com/app/2.0/web/" + g_ver + "/login/sign?k_ec=" + token,
+    url: `https://passportapi.115.com/app/2.0/web/${g_ver}/login/sign?k_ec=${token}`,
     responseType: 'arraybuffer',
     anonymous: true,
     onload: function(response) {
@@ -362,13 +357,10 @@ preLoginEncrypt = function(n, g) {
             body = Buffer.from(json.sign, 'base64');
             try {
               sig = sig_init(body);
-              return LoginEncrypt_(JSON.parse(n), g, {
-                pub: pub,
-                key: key
-              }, sig);
+              return LoginEncrypt_(JSON.parse(n), g, {pub, key}, sig);
             } catch (error1) {
               error = error1;
-              return GM_log(error.message + "\n" + error.stack);
+              return GM_log(`${error.message}\n${error.stack}`);
             }
           } else {
             return GM_log(JSON.stringify(json));
@@ -377,7 +369,7 @@ preLoginEncrypt = function(n, g) {
           return GM_log('data is null');
         }
       } else {
-        return GM_log("response.status = " + response.status);
+        return GM_log(`response.status = ${response.status}`);
       }
     }
   });
@@ -391,7 +383,7 @@ browserInterface.LoginEncrypt = function(n, g) {
     return preLoginEncrypt(n, g);
   } catch (error1) {
     error = error1;
-    return GM_log(error.message + "\n" + error.stack);
+    return GM_log(`${error.message}\n${error.stack}`);
   }
 };
 
@@ -431,18 +423,17 @@ unsafeWindow.document.addEventListener('DOMContentLoaded', function() {
       fastSig = function(userid, fileid, target, userkey) {
         var sha1, tmp;
         sha1 = new jsSHA('SHA-1', 'TEXT');
-        sha1.update("" + userid + fileid + target + "0");
+        sha1.update(`${userid}${fileid}${target}0`);
         tmp = sha1.getHash('HEX');
         sha1 = new jsSHA('SHA-1', 'TEXT');
-        sha1.update("" + userkey + tmp + "000000");
+        sha1.update(`${userkey}${tmp}000000`);
         return sha1.getHash('HEX', {
           outputUpper: true
         });
       };
       uploadinfo = null;
-      fastUpload = function(arg) {
-        var fileid, filename, filesize, preid, tm, tmus;
-        fileid = arg.fileid, preid = arg.preid, filename = arg.filename, filesize = arg.filesize;
+      fastUpload = function({fileid, preid, filename, filesize}) {
+        var tm, tmus;
         tmus = (new Date()).getTime();
         tm = Math.floor(tmus / 1000);
         return GM_xmlhttpRequest({
@@ -477,7 +468,7 @@ unsafeWindow.document.addEventListener('DOMContentLoaded', function() {
                 return alert('fastupload FAIL, LOL');
               }
             } else {
-              return GM_log("response.status = " + response.status);
+              return GM_log(`response.status = ${response.status}`);
             }
           }
         });
@@ -492,7 +483,7 @@ unsafeWindow.document.addEventListener('DOMContentLoaded', function() {
               uploadinfo = response.response;
               return fastUpload(param);
             } else {
-              return GM_log("response.status = " + response.status);
+              return GM_log(`response.status = ${response.status}`);
             }
           }
         });
@@ -517,8 +508,8 @@ unsafeWindow.document.addEventListener('DOMContentLoaded', function() {
             outputUpper: true
           });
           param = {
-            fileid: fileid,
-            preid: preid,
+            fileid,
+            preid,
             filename: f.name,
             filesize: f.size
           };
@@ -531,9 +522,9 @@ unsafeWindow.document.addEventListener('DOMContentLoaded', function() {
         nextPart = function(n) {
           var b, reader;
           reader = new FileReader();
-          b = f.slice(n * PSIZE, (n + 1) * PSIZE > f.size ? f.size : (n + 1) * PSIZE);
+          b = f.slice(n * PSIZE, ((n + 1) * PSIZE > f.size ? f.size : (n + 1) * PSIZE));
           reader.onerror = function(e) {
-            return GM_log("" + e.target.error);
+            return GM_log(`${e.target.error}`);
           };
           reader.onload = function(e) {
             var data, sha1;
@@ -546,7 +537,7 @@ unsafeWindow.document.addEventListener('DOMContentLoaded', function() {
               });
             }
             allSha1.update(data);
-            procLabel.textContent = "(" + (Math.floor((n + 1) * 100 / npart)) + "%)";
+            procLabel.textContent = `(${Math.floor((n + 1) * 100 / npart)}%)`;
             if (n === npart - 1) {
               return finalPart();
             } else {
@@ -572,7 +563,7 @@ unsafeWindow.document.addEventListener('DOMContentLoaded', function() {
     }
   } catch (error1) {
     error = error1;
-    return GM_log(error.message + "\n" + error.stack);
+    return GM_log(`${error.message}\n${error.stack}`);
   }
 });
 
